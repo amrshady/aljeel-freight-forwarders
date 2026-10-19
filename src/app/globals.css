@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+:root {
+  --background: hsl(0 0% 100%);
+  --foreground: hsl(203 35% 12%);
+  --card: hsl(0 0% 100%);
+  --card-foreground: hsl(203 35% 12%);
+  --denim: hsl(203.1 100% 35.1%);
+  --primary: hsl(203.1 100% 35.1%);
+  --primary-foreground: hsl(0 0% 100%);
+  --pimento: hsl(7.4 68.9% 58.4%);
+  --secondary: hsl(203 40% 96%);
+  --secondary-foreground: hsl(203 40% 16%);
+  --muted: hsl(203 32% 96%);
+  --muted-foreground: hsl(203 10% 40%);
+  --accent: hsl(203 40% 95%);
+  --accent-foreground: hsl(203 40% 16%);
+  --destructive: hsl(0 84.2% 60.2%);
+  --border: hsl(203 24% 88%);
+  --input: hsl(203 24% 88%);
+  --ring: hsl(203.1 100% 35.1%);
+  --radius: 0.5rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-denim: var(--denim);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-pimento: var(--pimento);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: ui-sans-serif, system-ui, sans-serif;
+  }
+}
+
+.header-surface {
+  position: relative;
+  isolation: isolate;
+  background-color: #0a4d78;
+  background-image:
+    radial-gradient(ellipse 55% 160% at 50% -40%, rgba(255, 255, 255, 0.09), transparent 70%),
+    linear-gradient(180deg, #08405f 0%, #0a5384 100%);
+  box-shadow: 0 6px 24px -12px rgba(4, 36, 58, 0.45);
+}
+
+.header-surface::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(222, 94, 76, 0.55) 20%,
+    #de5e4c 50%,
+    rgba(222, 94, 76, 0.55) 80%,
+    transparent
+  );
+}

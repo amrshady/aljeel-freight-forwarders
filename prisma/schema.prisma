@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String     @id @default(cuid())
+  email      String     @unique
+  name       String
+  role       String
+  company    String?
+  shipments  Shipment[] @relation("CreatedBy")
+  quotes     Quote[]
+  awards     Award[]    @relation("AwardedBy")
+  approvals  Award[]    @relation("ApprovedBy")
+  createdAt  DateTime   @default(now())
+}
+
+model Shipment {
+  id             String   @id @default(cuid())
+  reference      String   @unique
+  shipper        String
+  origin         String
+  destination    String
+  goods          String
+  cartons        Int
+  actualWeightKg Float
+  lengthCm       Float
+  widthCm        Float
+  heightCm       Float
+  status         String   @default("OPEN")
+  createdById    String
+  createdBy      User     @relation("CreatedBy", fields: [createdById], references: [id])
+  quotes         Quote[]
+  award          Award?
+  createdAt      DateTime @default(now())
+}
+
+model Quote {
+  id               String   @id @default(cuid())
+  shipmentId       String
+  shipment         Shipment @relation(fields: [shipmentId], references: [id])
+  forwarderId      String
+  forwarder        User     @relation(fields: [forwarderId], references: [id])
+  amount           Float
+  currency         String   @default("SAR")
+  paymentTermsDays Int      @default(90)
+  note             String   @default("")
+  award            Award?
+  createdAt        DateTime @default(now())
+
+  @@unique([shipmentId, forwarderId])
+}
+
+model Award {
+  id           String    @id @default(cuid())
+  shipmentId   String    @unique
+  shipment     Shipment  @relation(fields: [shipmentId], references: [id])
+  quoteId      String    @unique
+  quote        Quote     @relation(fields: [quoteId], references: [id])
+  reason       String    @default("")
+  awardedById  String
+  awardedBy    User      @relation("AwardedBy", fields: [awardedById], references: [id])
+  approvedById String?
+  approvedBy   User?     @relation("ApprovedBy", fields: [approvedById], references: [id])
+  approvedAt   DateTime?
+  createdAt    DateTime  @default(now())
+}
