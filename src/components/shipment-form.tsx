@@ -49,7 +49,7 @@ export function ShipmentForm({ error }: { error?: string }) {
           })
         }
       >
-        Fill from shipment 379785
+        Fill with test shipment
       </button>
       <Field
         label="Reference"

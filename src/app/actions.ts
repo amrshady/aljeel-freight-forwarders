@@ -9,6 +9,7 @@ import {
   roundMoney,
 } from "@/lib/freight";
 import { clearSession, getSessionUser, setSession } from "@/lib/session";
+import { verifyPassword } from "@/lib/password";
 
 function text(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -19,14 +20,19 @@ function number(formData: FormData, key: string) {
 }
 
 export async function signIn(formData: FormData) {
-  const email = text(formData, "email");
+  const email = text(formData, "email").toLowerCase();
+  const password = text(formData, "password");
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) redirect("/?error=unknown");
+  const valid =
+    user && password && (await verifyPassword(password, user.passwordHash));
+  if (!valid) redirect("/?error=invalid");
   await setSession(user.id);
   redirect("/shipments");
 }
 
 export async function signOut() {
+  const user = await getSessionUser();
+  if (!user) redirect("/");
   await clearSession();
   redirect("/");
 }

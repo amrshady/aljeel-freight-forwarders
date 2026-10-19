@@ -1,14 +1,10 @@
 import { signIn } from "@/app/actions";
 import { AljeelLogo } from "@/components/aljeel-logo";
 import { SiteFooter } from "@/components/site-footer";
-import { prisma } from "@/lib/db";
-import { roleLabel } from "@/lib/freight";
 import { getSessionUser } from "@/lib/session";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
-
-const roleOrder = ["PROCUREMENT", "FINANCE", "FORWARDER"];
 
 export default async function Home({
   searchParams,
@@ -19,13 +15,6 @@ export default async function Home({
   if (user) redirect("/shipments");
 
   const { error } = await searchParams;
-  const users = await prisma.user.findMany();
-  users.sort(
-    (a, b) =>
-      roleOrder.indexOf(a.role) - roleOrder.indexOf(b.role) ||
-      a.name.localeCompare(b.name),
-  );
-
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <div className="flex h-1.5" dir="ltr" aria-hidden="true">
@@ -39,36 +28,38 @@ export default async function Home({
             Freight quotations
           </h1>
           <p className="mt-3 text-center text-sm leading-6 text-muted-foreground">
-            Local sign-in for the first version. Production will use its own
-            address and login list, separate from the AP portal.
+            Sign in with your portal email address and password.
           </p>
           {error ? (
             <p className="mt-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              That account is not on this portal.
+              The email or password is incorrect.
             </p>
           ) : null}
-          <ul className="mt-8 space-y-3">
-            {users.map((account) => (
-              <li key={account.id}>
-                <form action={signIn}>
-                  <input type="hidden" name="email" value={account.email} />
-                  <button className="flex w-full items-center justify-between rounded-xl border bg-card px-4 py-3 text-left shadow-sm transition-colors hover:border-primary/40">
-                    <span>
-                      <span className="block font-medium text-foreground">
-                        {account.company ?? account.name}
-                      </span>
-                      <span className="block text-sm text-muted-foreground">
-                        {account.email}
-                      </span>
-                    </span>
-                    <span className="text-sm text-primary">
-                      {roleLabel(account.role)}
-                    </span>
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
+          <form action={signIn} className="mt-8 space-y-4 rounded-xl border bg-card p-6 shadow-sm">
+            <label className="block text-sm text-foreground">
+              Email
+              <input
+                required
+                name="email"
+                type="email"
+                autoComplete="username"
+                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
+              />
+            </label>
+            <label className="block text-sm text-foreground">
+              Password
+              <input
+                required
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
+              />
+            </label>
+            <button className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+              Sign in
+            </button>
+          </form>
         </div>
       </main>
       <SiteFooter />

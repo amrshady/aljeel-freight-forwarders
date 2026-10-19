@@ -5,12 +5,11 @@ export const ROLES = ["PROCUREMENT", "FINANCE", "FORWARDER"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const SAMPLE_SHIPMENT = {
-  reference: "379785",
-  shipper: "St. Jude Medical Coordination Center",
-  origin: "SJM EDC, Bedrijvenzone Machelen-Cargo 831, 1830 Machelen",
-  destination:
-    "Al Jeel Medical & Trading Co. Ltd., Prince Thamer Bin Abdul Aziz Street, Riyadh 11422",
-  goods: "HM3 sterile mod cable, 4 units",
+  reference: "TEST-1001",
+  shipper: "Test Shipper",
+  origin: "Test Origin",
+  destination: "Test Destination",
+  goods: "Test medical supplies",
   cartons: 1,
   actualWeightKg: 1.378,
   lengthCm: 25,

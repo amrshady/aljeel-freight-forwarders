@@ -10,6 +10,7 @@ datasource db {
 model User {
   id         String     @id @default(cuid())
   email      String     @unique
+  passwordHash String
   name       String
   role       String
   company    String?
@@ -17,7 +18,19 @@ model User {
   quotes     Quote[]
   awards     Award[]    @relation("AwardedBy")
   approvals  Award[]    @relation("ApprovedBy")
+  sessions   Session[]
   createdAt  DateTime   @default(now())
+}
+
+model Session {
+  tokenHash String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Shipment {

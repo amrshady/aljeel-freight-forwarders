@@ -1,60 +1,68 @@
 import { PrismaClient } from "@prisma/client";
-import { SAMPLE_SHIPMENT } from "../src/lib/freight";
+import { hashPassword } from "../src/lib/password";
 
 const prisma = new PrismaClient();
 
 const users = [
   {
-    email: "procurement@local.test",
-    name: "Procurement",
+    email: "procurement@example.test",
+    name: "Test Procurement",
     role: "PROCUREMENT",
-    company: "Al Jeel",
+    company: "Test Company",
+    passwordEnv: "SEED_PASSWORD_PROCUREMENT",
   },
   {
-    email: "finance@local.test",
-    name: "Finance",
+    email: "finance@example.test",
+    name: "Test Finance",
     role: "FINANCE",
-    company: "Al Jeel",
+    company: "Test Company",
+    passwordEnv: "SEED_PASSWORD_FINANCE",
   },
   {
-    email: "forwarder-a@local.test",
-    name: "Forwarder A",
+    email: "forwarder-a@example.test",
+    name: "Test Forwarder A",
     role: "FORWARDER",
-    company: "Forwarder A",
+    company: "Test Forwarder A",
+    passwordEnv: "SEED_PASSWORD_FORWARDER_A",
   },
   {
-    email: "forwarder-b@local.test",
-    name: "Forwarder B",
+    email: "forwarder-b@example.test",
+    name: "Test Forwarder B",
     role: "FORWARDER",
-    company: "Forwarder B",
+    company: "Test Forwarder B",
+    passwordEnv: "SEED_PASSWORD_FORWARDER_B",
   },
-];
+] as const;
 
 async function main() {
+  const missing = users
+    .filter(({ passwordEnv }) => !process.env[passwordEnv])
+    .map(({ passwordEnv }) => passwordEnv);
+  if (missing.length) {
+    throw new Error(
+      `Missing required seed password variables: ${missing.join(", ")}`,
+    );
+  }
+
   for (const user of users) {
+    const passwordHash = await hashPassword(process.env[user.passwordEnv]!);
     await prisma.user.upsert({
       where: { email: user.email },
       update: {
         name: user.name,
         role: user.role,
         company: user.company,
+        passwordHash,
       },
-      create: user,
+      create: {
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        company: user.company,
+        passwordHash,
+      },
     });
   }
-
-  const procurement = await prisma.user.findUniqueOrThrow({
-    where: { email: "procurement@local.test" },
-  });
-
-  await prisma.shipment.upsert({
-    where: { reference: SAMPLE_SHIPMENT.reference },
-    update: {},
-    create: {
-      ...SAMPLE_SHIPMENT,
-      createdById: procurement.id,
-    },
-  });
 }
 
 main()
