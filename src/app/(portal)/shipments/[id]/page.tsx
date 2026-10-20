@@ -4,10 +4,12 @@ import { prisma } from "@/lib/db";
 import {
   DEFAULT_PAYMENT_TERMS_DAYS,
   chargeableKg,
+  containerLabel,
   formatKg,
   formatMoney,
   lowestAmount,
   needsAwardReason,
+  shipmentModeLabel,
   statusLabel,
   volumetricKg,
 } from "@/lib/freight";
@@ -57,19 +59,33 @@ export default async function ShipmentPage({
   });
   if (!shipment) notFound();
 
-  const volume = volumetricKg(
-    shipment.lengthCm,
-    shipment.widthCm,
-    shipment.heightCm,
-    shipment.cartons,
-  );
-  const chargeable = chargeableKg(
-    shipment.actualWeightKg,
-    shipment.lengthCm,
-    shipment.widthCm,
-    shipment.heightCm,
-    shipment.cartons,
-  );
+  const air =
+    shipment.mode === "AIR" &&
+    shipment.cartons != null &&
+    shipment.actualWeightKg != null &&
+    shipment.lengthCm != null &&
+    shipment.widthCm != null &&
+    shipment.heightCm != null
+      ? {
+          cartons: shipment.cartons,
+          actualWeightKg: shipment.actualWeightKg,
+          lengthCm: shipment.lengthCm,
+          widthCm: shipment.widthCm,
+          heightCm: shipment.heightCm,
+        }
+      : null;
+  const volume = air
+    ? volumetricKg(air.lengthCm, air.widthCm, air.heightCm, air.cartons)
+    : null;
+  const chargeable = air
+    ? chargeableKg(
+        air.actualWeightKg,
+        air.lengthCm,
+        air.widthCm,
+        air.heightCm,
+        air.cartons,
+      )
+    : null;
   const ownQuote = shipment.quotes.find((quote) => quote.forwarderId === user.id);
   const visibleQuotes =
     user.role === "FORWARDER"
@@ -118,23 +134,42 @@ export default async function ShipmentPage({
       ) : null}
 
       <section className="grid gap-4 rounded-xl border bg-card p-6 shadow-sm sm:grid-cols-2">
+        <Fact label="Type" value={shipmentModeLabel(shipment.mode)} />
         <Fact label="Shipper" value={shipment.shipper} />
-        <Fact label="Cartons" value={String(shipment.cartons)} />
         <Fact label="Origin" value={shipment.origin} />
         <Fact label="Destination" value={shipment.destination} />
-        <Fact label="Actual weight" value={formatKg(shipment.actualWeightKg)} />
-        <Fact
-          label="Dimensions"
-          value={`${shipment.lengthCm} × ${shipment.widthCm} × ${shipment.heightCm} cm`}
-        />
-        <Fact label="Volume weight" value={formatKg(volume)} />
-        <Fact label="Chargeable weight" value={formatKg(chargeable)} />
+        {air && volume != null && chargeable != null ? (
+          <>
+            <Fact label="Cartons" value={String(air.cartons)} />
+            <Fact label="Actual weight" value={formatKg(air.actualWeightKg)} />
+            <Fact
+              label="Dimensions"
+              value={`${air.lengthCm} × ${air.widthCm} × ${air.heightCm} cm`}
+            />
+            <Fact label="Volume weight" value={formatKg(volume)} />
+            <Fact label="Chargeable weight" value={formatKg(chargeable)} />
+          </>
+        ) : (
+          <>
+            <Fact
+              label="Container"
+              value={containerLabel(shipment.containerType ?? "")}
+            />
+            <Fact
+              label="Number of containers"
+              value={String(shipment.containerCount ?? "")}
+            />
+          </>
+        )}
       </section>
 
       {user.role === "FORWARDER" && shipment.status === "OPEN" && !ownQuote ? (
         <section className="rounded-xl border bg-card p-6 shadow-sm">
           <h2 className="font-medium text-foreground">Your price</h2>
           <p className="mt-1 text-sm text-muted-foreground">
+            {shipment.mode === "SEA"
+              ? "Price this container requirement."
+              : "Price the chargeable weight."}{" "}
             Other forwarders cannot see this. Payment terms start at{" "}
             {DEFAULT_PAYMENT_TERMS_DAYS} days.
           </p>

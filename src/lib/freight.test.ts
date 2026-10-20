@@ -41,6 +41,22 @@ describe("shipment edit", () => {
       shipmentDetailsChanged(current, { ...current, actualWeightKg: 2 }),
     ).toBe(true);
   });
+
+  it("treats a switch to sea as a new shipment for quoting", () => {
+    expect(
+      shipmentDetailsChanged(current, {
+        ...current,
+        mode: "SEA",
+        cartons: null,
+        actualWeightKg: null,
+        lengthCm: null,
+        widthCm: null,
+        heightCm: null,
+        containerType: "40FT",
+        containerCount: 1,
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("award reason", () => {

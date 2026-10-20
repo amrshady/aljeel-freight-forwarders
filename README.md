@@ -8,7 +8,7 @@ Procurement creates one air shipment. Two forwarders each submit a price. Procur
 
 The included seed accounts and sample form data are dummy data only. Payment terms default to 90 days.
 
-Air is priced on weight and dimensions. Sea, priced on the container, comes after this path works.
+Air is priced on weight and dimensions. Sea is priced on the container. Every forwarder can see each request and send a price.
 
 ## Not in the first version
 

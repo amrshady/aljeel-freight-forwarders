@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { formatMoney, statusLabel } from "@/lib/freight";
+import { formatMoney, shipmentModeLabel, statusLabel } from "@/lib/freight";
 import { getSessionUser } from "@/lib/session";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -25,7 +25,7 @@ export default async function ShipmentsPage() {
           <h1 className="text-2xl font-bold tracking-tight">Shipments</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {user.role === "PROCUREMENT"
-              ? "Create an air shipment, then choose a forwarder."
+              ? "Create an air or sea shipment, then pick a price."
               : user.role === "FINANCE"
                 ? "Approve the forwarder Procurement has chosen."
                 : "Send one price. Other forwarders’ prices stay hidden."}
@@ -64,7 +64,7 @@ export default async function ShipmentsPage() {
                   </span>
                   <span className="text-right text-sm">
                     <span className="block text-foreground">
-                      {statusLabel(shipment.status)}
+                      {shipmentModeLabel(shipment.mode)} · {statusLabel(shipment.status)}
                     </span>
                     {user.role === "FORWARDER" && ownQuote ? (
                       <span className="mt-1 block text-muted-foreground">

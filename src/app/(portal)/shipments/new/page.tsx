@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 
 const errors: Record<string, string> = {
-  invalid: "Check the weight, dimensions, and carton count.",
+  invalid: "Check the air weight and dimensions, or the sea container count.",
   duplicate: "That reference already exists.",
 };
 
@@ -20,10 +20,9 @@ export default async function NewShipmentPage({
 
   return (
     <main className="max-w-2xl">
-      <h1 className="text-2xl font-bold tracking-tight">New air shipment</h1>
+      <h1 className="text-2xl font-bold tracking-tight">New shipment</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Price is on chargeable weight: the higher of the actual weight and
-        length × width × height × cartons ÷ 6000.
+        Air is priced on weight and dimensions. Sea is priced on the container.
       </p>
       <div className="mt-6 rounded-xl border bg-card p-6 shadow-sm">
         <ShipmentForm error={error ? errors[error] : undefined} />

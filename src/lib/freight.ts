@@ -4,7 +4,14 @@ export const DEFAULT_PAYMENT_TERMS_DAYS = 90;
 export const ROLES = ["PROCUREMENT", "FINANCE", "FORWARDER"] as const;
 export type Role = (typeof ROLES)[number];
 
+export const CONTAINER_TYPES = [
+  { value: "20FT", label: "20 ft" },
+  { value: "40FT", label: "40 ft" },
+  { value: "40HC", label: "40 ft high cube" },
+] as const;
+
 export const SAMPLE_SHIPMENT = {
+  mode: "AIR",
   reference: "TEST-1001",
   shipper: "Test Shipper",
   origin: "Test Origin",
@@ -15,31 +22,43 @@ export const SAMPLE_SHIPMENT = {
   lengthCm: 25,
   widthCm: 31,
   heightCm: 11,
+  containerType: null,
+  containerCount: null,
 };
 
 export type ShipmentDetails = {
+  mode: string;
   reference: string;
   shipper: string;
   origin: string;
   destination: string;
   goods: string;
-  cartons: number;
-  actualWeightKg: number;
-  lengthCm: number;
-  widthCm: number;
-  heightCm: number;
+  cartons: number | null;
+  actualWeightKg: number | null;
+  lengthCm: number | null;
+  widthCm: number | null;
+  heightCm: number | null;
+  containerType: string | null;
+  containerCount: number | null;
 };
+
+function numbersDiffer(current: number | null, next: number | null) {
+  if (current === null || next === null) return current !== next;
+  return Math.abs(current - next) > 1e-9;
+}
 
 export function shipmentDetailsChanged(
   current: ShipmentDetails,
   next: ShipmentDetails,
 ) {
+  if (current.mode !== next.mode) return true;
   const textFields = [
     "reference",
     "shipper",
     "origin",
     "destination",
     "goods",
+    "containerType",
   ] as const;
   if (textFields.some((field) => current[field] !== next[field])) return true;
   const numberFields = [
@@ -48,10 +67,17 @@ export function shipmentDetailsChanged(
     "lengthCm",
     "widthCm",
     "heightCm",
+    "containerCount",
   ] as const;
-  return numberFields.some(
-    (field) => Math.abs(current[field] - next[field]) > 1e-9,
-  );
+  return numberFields.some((field) => numbersDiffer(current[field], next[field]));
+}
+
+export function containerLabel(type: string) {
+  return CONTAINER_TYPES.find((item) => item.value === type)?.label ?? type;
+}
+
+export function shipmentModeLabel(mode: string) {
+  return mode === "SEA" ? "Sea" : "Air";
 }
 
 export function roundMoney(amount: number) {

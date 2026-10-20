@@ -4,10 +4,12 @@ import { Prisma } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import {
+  CONTAINER_TYPES,
   DEFAULT_PAYMENT_TERMS_DAYS,
   needsAwardReason,
   roundMoney,
   shipmentDetailsChanged,
+  type ShipmentDetails,
 } from "@/lib/freight";
 import { getSessionUser } from "@/lib/session";
 
@@ -24,43 +26,72 @@ export async function signOut() {
 }
 
 function shipmentInput(formData: FormData) {
+  const mode = text(formData, "mode");
   const reference = text(formData, "reference");
   const shipper = text(formData, "shipper");
   const origin = text(formData, "origin");
   const destination = text(formData, "destination");
   const goods = text(formData, "goods");
-  const cartons = number(formData, "cartons");
-  const actualWeightKg = number(formData, "actualWeightKg");
-  const lengthCm = number(formData, "lengthCm");
-  const widthCm = number(formData, "widthCm");
-  const heightCm = number(formData, "heightCm");
+  const shared = { reference, shipper, origin, destination, goods };
 
-  const valid =
-    reference &&
-    shipper &&
-    origin &&
-    destination &&
-    goods &&
-    Number.isInteger(cartons) &&
-    cartons > 0 &&
-    actualWeightKg > 0 &&
-    lengthCm > 0 &&
-    widthCm > 0 &&
-    heightCm > 0;
+  if (!reference || !shipper || !origin || !destination || !goods) {
+    return { ok: false, error: "invalid" } as const;
+  }
 
-  if (!valid) return null;
-  return {
-    reference,
-    shipper,
-    origin,
-    destination,
-    goods,
-    cartons,
-    actualWeightKg,
-    lengthCm,
-    widthCm,
-    heightCm,
-  };
+  if (mode === "AIR") {
+    const cartons = number(formData, "cartons");
+    const actualWeightKg = number(formData, "actualWeightKg");
+    const lengthCm = number(formData, "lengthCm");
+    const widthCm = number(formData, "widthCm");
+    const heightCm = number(formData, "heightCm");
+    const valid =
+      Number.isInteger(cartons) &&
+      cartons > 0 &&
+      actualWeightKg > 0 &&
+      lengthCm > 0 &&
+      widthCm > 0 &&
+      heightCm > 0;
+    if (!valid) return { ok: false, error: "invalid" } as const;
+    return {
+      ok: true,
+      input: {
+        ...shared,
+        mode: "AIR",
+        cartons,
+        actualWeightKg,
+        lengthCm,
+        widthCm,
+        heightCm,
+        containerType: null,
+        containerCount: null,
+      },
+    } as const;
+  }
+
+  if (mode === "SEA") {
+    const containerType = text(formData, "containerType");
+    const containerCount = number(formData, "containerCount");
+    const known = CONTAINER_TYPES.some((item) => item.value === containerType);
+    if (!known || !Number.isInteger(containerCount) || containerCount <= 0) {
+      return { ok: false, error: "invalid" } as const;
+    }
+    return {
+      ok: true,
+      input: {
+        ...shared,
+        mode: "SEA",
+        cartons: null,
+        actualWeightKg: null,
+        lengthCm: null,
+        widthCm: null,
+        heightCm: null,
+        containerType,
+        containerCount,
+      },
+    } as const;
+  }
+
+  return { ok: false, error: "invalid" } as const;
 }
 
 function isDuplicate(error: unknown) {
@@ -74,13 +105,13 @@ export async function createShipment(formData: FormData) {
   const user = await getSessionUser();
   if (user?.role !== "PROCUREMENT") redirect("/shipments");
 
-  const input = shipmentInput(formData);
-  if (!input) redirect("/shipments/new?error=invalid");
+  const parsed = shipmentInput(formData);
+  if (!parsed.ok) redirect(`/shipments/new?error=${parsed.error}`);
 
   try {
     const shipment = await prisma.shipment.create({
       data: {
-        ...input,
+        ...parsed.input,
         createdById: user.id,
       },
     });
@@ -89,6 +120,38 @@ export async function createShipment(formData: FormData) {
     if (isDuplicate(error)) redirect("/shipments/new?error=duplicate");
     throw error;
   }
+}
+
+function detailsOf(shipment: {
+  mode: string;
+  reference: string;
+  shipper: string;
+  origin: string;
+  destination: string;
+  goods: string;
+  cartons: number | null;
+  actualWeightKg: number | null;
+  lengthCm: number | null;
+  widthCm: number | null;
+  heightCm: number | null;
+  containerType: string | null;
+  containerCount: number | null;
+}): ShipmentDetails {
+  return {
+    mode: shipment.mode,
+    reference: shipment.reference,
+    shipper: shipment.shipper,
+    origin: shipment.origin,
+    destination: shipment.destination,
+    goods: shipment.goods,
+    cartons: shipment.cartons,
+    actualWeightKg: shipment.actualWeightKg,
+    lengthCm: shipment.lengthCm,
+    widthCm: shipment.widthCm,
+    heightCm: shipment.heightCm,
+    containerType: shipment.containerType,
+    containerCount: shipment.containerCount,
+  };
 }
 
 export async function updateShipment(formData: FormData) {
@@ -101,22 +164,25 @@ export async function updateShipment(formData: FormData) {
   });
   if (!existing) redirect("/shipments");
 
-  const input = shipmentInput(formData);
-  if (!input) redirect(`/shipments/${shipmentId}/edit?error=invalid`);
+  const parsed = shipmentInput(formData);
+  if (!parsed.ok) redirect(`/shipments/${shipmentId}/edit?error=${parsed.error}`);
 
-  const detailsChanged = shipmentDetailsChanged(existing, input);
+  if (!shipmentDetailsChanged(detailsOf(existing), parsed.input)) {
+    redirect(`/shipments/${shipmentId}`);
+  }
 
   try {
-    if (detailsChanged) {
-      await prisma.$transaction([
-        prisma.award.deleteMany({ where: { shipmentId } }),
-        prisma.quote.deleteMany({ where: { shipmentId } }),
-        prisma.shipment.update({
-          where: { id: shipmentId },
-          data: { ...input, status: "OPEN" },
-        }),
-      ]);
-    }
+    await prisma.$transaction([
+      prisma.award.deleteMany({ where: { shipmentId } }),
+      prisma.quote.deleteMany({ where: { shipmentId } }),
+      prisma.shipment.update({
+        where: { id: shipmentId },
+        data: {
+          ...parsed.input,
+          status: "OPEN",
+        },
+      }),
+    ]);
   } catch (error) {
     if (isDuplicate(error)) {
       redirect(`/shipments/${shipmentId}/edit?error=duplicate`);
@@ -124,11 +190,7 @@ export async function updateShipment(formData: FormData) {
     throw error;
   }
 
-  redirect(
-    detailsChanged
-      ? `/shipments/${shipmentId}?cleared=1`
-      : `/shipments/${shipmentId}`,
-  );
+  redirect(`/shipments/${shipmentId}?cleared=1`);
 }
 
 export async function deleteShipment(formData: FormData) {
