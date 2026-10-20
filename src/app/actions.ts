@@ -10,6 +10,7 @@ import {
 } from "@/lib/freight";
 import { clearSession, getSessionUser, setSession } from "@/lib/session";
 import { verifyPassword } from "@/lib/password";
+import { getAccessConfig, isAccessAuthMode } from "@/lib/auth-mode";
 
 function text(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -20,17 +21,25 @@ function number(formData: FormData, key: string) {
 }
 
 export async function signIn(formData: FormData) {
+  if (isAccessAuthMode()) redirect("/");
   const email = text(formData, "email").toLowerCase();
   const password = text(formData, "password");
   const user = await prisma.user.findUnique({ where: { email } });
   const valid =
-    user && password && (await verifyPassword(password, user.passwordHash));
+    user?.passwordHash &&
+    password &&
+    (await verifyPassword(password, user.passwordHash));
   if (!valid) redirect("/?error=invalid");
   await setSession(user.id);
   redirect("/shipments");
 }
 
 export async function signOut() {
+  if (isAccessAuthMode()) {
+    const config = getAccessConfig();
+    if (!config) redirect("/");
+    redirect(`https://${config.teamDomain}/cdn-cgi/access/logout`);
+  }
   const user = await getSessionUser();
   if (!user) redirect("/");
   await clearSession();

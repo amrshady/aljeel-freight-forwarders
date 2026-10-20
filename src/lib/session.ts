@@ -1,4 +1,6 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { getAccessConfig, isAccessAuthMode } from "./auth-mode";
+import { verifyCloudflareAccess } from "./cf-access";
 import { prisma } from "./db";
 import {
   createSessionToken,
@@ -32,6 +34,14 @@ export async function findSessionUser(
 }
 
 export async function getSessionUser() {
+  if (isAccessAuthMode()) {
+    const config = getAccessConfig();
+    if (!config) return null;
+    const email = await verifyCloudflareAccess(await headers(), config);
+    if (!email) return null;
+    return prisma.user.findUnique({ where: { email } });
+  }
+
   const jar = await cookies();
   return findSessionUser(jar.get(COOKIE)?.value);
 }

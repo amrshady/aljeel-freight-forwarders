@@ -3,6 +3,7 @@ import { AljeelLogo } from "@/components/aljeel-logo";
 import { SiteFooter } from "@/components/site-footer";
 import { getSessionUser } from "@/lib/session";
 import { redirect } from "next/navigation";
+import { isAccessAuthMode } from "@/lib/auth-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,16 @@ export default async function Home({
 }) {
   const user = await getSessionUser();
   if (user) redirect("/shipments");
+
+  if (isAccessAuthMode()) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background px-6">
+        <p className="max-w-lg text-center text-base text-foreground">
+          Your email is not set up for this portal. Contact the portal administrator.
+        </p>
+      </main>
+    );
+  }
 
   const { error } = await searchParams;
   return (

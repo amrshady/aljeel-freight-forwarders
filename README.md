@@ -38,3 +38,27 @@ pnpm start
 ```
 
 Run the seed again whenever a seed account password needs to be rotated; existing accounts receive new password hashes.
+
+## Cloudflare Access login
+
+Set `AUTH_MODE=access`, `CF_ACCESS_TEAM_DOMAIN`, and `CF_ACCESS_AUD` in the
+deployment environment. The team domain is the Access domain, such as
+`example.cloudflareaccess.com`, without a scheme. Cloudflare Access must protect
+the site and pass its signed identity assertion. If either Access setting is
+missing, nobody is treated as signed in. Leave `AUTH_MODE` unset (or set it to
+`password`) to retain email-and-password login.
+
+Access users must be provisioned explicitly; verified identities are never
+created automatically. Add or update one with:
+
+```bash
+pnpm exec tsx prisma/upsert-user.ts \
+  --email person@example.test \
+  --name "Example User" \
+  --role PROCUREMENT \
+  --company "Example Company"
+```
+
+Valid roles are `PROCUREMENT`, `FINANCE`, and `FORWARDER`. `--company` is
+optional. The command stores no password, so the user can sign in only through
+Cloudflare Access unless a password hash is provisioned separately.
