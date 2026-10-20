@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createShipment } from "@/app/actions";
+import { createShipment, updateShipment } from "@/app/actions";
 import { SAMPLE_SHIPMENT } from "@/lib/freight";
 
 const empty = {
@@ -17,20 +17,36 @@ const empty = {
   heightCm: "",
 };
 
-export function ShipmentForm({ error }: { error?: string }) {
-  const [values, setValues] = useState(empty);
+export function ShipmentForm({
+  error,
+  shipmentId,
+  initial,
+}: {
+  error?: string;
+  shipmentId?: string;
+  initial?: typeof empty;
+}) {
+  const editing = Boolean(shipmentId);
+  const [values, setValues] = useState(initial ?? empty);
 
   function set(key: keyof typeof empty, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
   }
 
   return (
-    <form action={createShipment} className="space-y-4">
+    <form
+      action={editing ? updateShipment : createShipment}
+      className="space-y-4"
+    >
+      {shipmentId ? (
+        <input type="hidden" name="shipmentId" value={shipmentId} />
+      ) : null}
       {error ? (
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
         </p>
       ) : null}
+      {editing ? null : (
       <button
         type="button"
         className="inline-flex h-9 items-center rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent"
@@ -51,6 +67,7 @@ export function ShipmentForm({ error }: { error?: string }) {
       >
         Fill with test shipment
       </button>
+      )}
       <Field
         label="Reference"
         name="reference"
@@ -120,7 +137,7 @@ export function ShipmentForm({ error }: { error?: string }) {
         />
       </div>
       <button className="inline-flex h-10 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-        Create shipment
+        {editing ? "Save changes" : "Create shipment"}
       </button>
     </form>
   );

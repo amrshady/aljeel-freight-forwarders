@@ -23,11 +23,11 @@ pnpm db:seed
 pnpm dev
 ```
 
-Before running these commands, copy `.env.example` to `.env` and set `DATABASE_URL` plus all four `SEED_PASSWORD_*` values. The app is at http://localhost:3000.
+Before running these commands, copy `.env.example` to `.env` and set `DATABASE_URL`. The app is at http://localhost:3000.
 
 ## Deploy
 
-Provide `DATABASE_URL` and all four seed password variables through the deployment environment or secret manager. Do not commit their values. For a new deployment, run:
+Provide `DATABASE_URL`, `CF_ACCESS_TEAM_DOMAIN`, and `CF_ACCESS_AUD` through the deployment environment or secret manager. Do not commit their values. For a new deployment, run:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -37,16 +37,12 @@ pnpm build
 pnpm start
 ```
 
-Run the seed again whenever a seed account password needs to be rotated; existing accounts receive new password hashes.
-
 ## Cloudflare Access login
 
-Set `AUTH_MODE=access`, `CF_ACCESS_TEAM_DOMAIN`, and `CF_ACCESS_AUD` in the
-deployment environment. The team domain is the Access domain, such as
-`example.cloudflareaccess.com`, without a scheme. Cloudflare Access must protect
-the site and pass its signed identity assertion. If either Access setting is
-missing, nobody is treated as signed in. Leave `AUTH_MODE` unset (or set it to
-`password`) to retain email-and-password login.
+Set `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` in the deployment environment.
+The team domain is the Access domain, such as `example.cloudflareaccess.com`,
+without a scheme. Cloudflare Access must protect the site and pass its signed
+identity assertion. If either setting is missing, nobody is treated as signed in.
 
 In Access mode, signing out navigates to the portal's own `/cdn-cgi/access/logout` path.
 
@@ -62,5 +58,4 @@ pnpm exec tsx prisma/upsert-user.ts \
 ```
 
 Valid roles are `PROCUREMENT`, `FINANCE`, and `FORWARDER`. `--company` is
-optional. The command stores no password, so the user can sign in only through
-Cloudflare Access unless a password hash is provisioned separately.
+optional. Sign-in is only through Cloudflare Access.

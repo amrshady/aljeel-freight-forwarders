@@ -1,4 +1,5 @@
 import { approveAward, awardQuote, submitQuote } from "@/app/actions";
+import { DeleteShipmentButton } from "@/components/delete-shipment-button";
 import { prisma } from "@/lib/db";
 import {
   DEFAULT_PAYMENT_TERMS_DAYS,
@@ -11,6 +12,7 @@ import {
   volumetricKg,
 } from "@/lib/freight";
 import { getSessionUser } from "@/lib/session";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -30,12 +32,12 @@ export default async function ShipmentPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; cleared?: string }>;
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/");
   const { id } = await params;
-  const { error } = await searchParams;
+  const { error, cleared } = await searchParams;
 
   const shipment = await prisma.shipment.findUnique({
     where: { id },
@@ -78,13 +80,36 @@ export default async function ShipmentPage({
 
   return (
     <main className="space-y-6">
-      <div>
-        <p className="text-sm text-muted-foreground">{statusLabel(shipment.status)}</p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight">
-          {shipment.reference}
-        </h1>
-        <p className="mt-2 text-sm text-muted-foreground">{shipment.goods}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm text-muted-foreground">{statusLabel(shipment.status)}</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">
+            {shipment.reference}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">{shipment.goods}</p>
+        </div>
+        {user.role === "PROCUREMENT" ? (
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/shipments/${shipment.id}/edit`}
+              className="inline-flex h-9 items-center rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent"
+            >
+              Edit
+            </Link>
+            <DeleteShipmentButton
+              shipmentId={shipment.id}
+              reference={shipment.reference}
+            />
+          </div>
+        ) : null}
       </div>
+
+      {cleared === "1" ? (
+        <p className="rounded-md bg-accent px-3 py-2 text-sm text-foreground">
+          Prices for this shipment were removed. Forwarders need to send a new
+          price.
+        </p>
+      ) : null}
 
       {error && errors[error] ? (
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">

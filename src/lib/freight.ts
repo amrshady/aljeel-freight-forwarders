@@ -17,6 +17,43 @@ export const SAMPLE_SHIPMENT = {
   heightCm: 11,
 };
 
+export type ShipmentDetails = {
+  reference: string;
+  shipper: string;
+  origin: string;
+  destination: string;
+  goods: string;
+  cartons: number;
+  actualWeightKg: number;
+  lengthCm: number;
+  widthCm: number;
+  heightCm: number;
+};
+
+export function shipmentDetailsChanged(
+  current: ShipmentDetails,
+  next: ShipmentDetails,
+) {
+  const textFields = [
+    "reference",
+    "shipper",
+    "origin",
+    "destination",
+    "goods",
+  ] as const;
+  if (textFields.some((field) => current[field] !== next[field])) return true;
+  const numberFields = [
+    "cartons",
+    "actualWeightKg",
+    "lengthCm",
+    "widthCm",
+    "heightCm",
+  ] as const;
+  return numberFields.some(
+    (field) => Math.abs(current[field] - next[field]) > 1e-9,
+  );
+}
+
 export function roundMoney(amount: number) {
   return Math.round(amount * 100) / 100;
 }

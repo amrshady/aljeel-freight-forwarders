@@ -39,8 +39,8 @@ async function main() {
   const user = readArgs(process.argv.slice(2));
   await prisma.user.upsert({
     where: { email: user.email },
-    update: { ...user, passwordHash: null },
-    create: { ...user, passwordHash: null },
+    update: user,
+    create: user,
   });
   console.log(`Upserted ${user.email}`);
 }

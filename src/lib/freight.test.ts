@@ -3,6 +3,7 @@ import {
   SAMPLE_SHIPMENT,
   chargeableKg,
   needsAwardReason,
+  shipmentDetailsChanged,
   volumetricKg,
 } from "./freight";
 
@@ -25,6 +26,20 @@ describe("air chargeable weight", () => {
 
   it("multiplies volume by the number of cartons", () => {
     expect(chargeableKg(1, 25, 31, 11, 2)).toBe(2.84);
+  });
+});
+
+describe("shipment edit", () => {
+  const current = { ...SAMPLE_SHIPMENT };
+
+  it("treats an unchanged shipment as the same", () => {
+    expect(shipmentDetailsChanged(current, { ...current })).toBe(false);
+  });
+
+  it("treats a changed weight as a new shipment for quoting", () => {
+    expect(
+      shipmentDetailsChanged(current, { ...current, actualWeightKg: 2 }),
+    ).toBe(true);
   });
 });
 

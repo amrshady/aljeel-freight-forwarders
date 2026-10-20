@@ -7,10 +7,9 @@ import {
   DEFAULT_PAYMENT_TERMS_DAYS,
   needsAwardReason,
   roundMoney,
+  shipmentDetailsChanged,
 } from "@/lib/freight";
-import { clearSession, getSessionUser, setSession } from "@/lib/session";
-import { verifyPassword } from "@/lib/password";
-import { isAccessAuthMode } from "@/lib/auth-mode";
+import { getSessionUser } from "@/lib/session";
 
 function text(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -20,34 +19,11 @@ function number(formData: FormData, key: string) {
   return Number(formData.get(key));
 }
 
-export async function signIn(formData: FormData) {
-  if (isAccessAuthMode()) redirect("/");
-  const email = text(formData, "email").toLowerCase();
-  const password = text(formData, "password");
-  const user = await prisma.user.findUnique({ where: { email } });
-  const valid =
-    user?.passwordHash &&
-    password &&
-    (await verifyPassword(password, user.passwordHash));
-  if (!valid) redirect("/?error=invalid");
-  await setSession(user.id);
-  redirect("/shipments");
-}
-
 export async function signOut() {
-  if (isAccessAuthMode()) {
-    redirect("/cdn-cgi/access/logout");
-  }
-  const user = await getSessionUser();
-  if (!user) redirect("/");
-  await clearSession();
-  redirect("/");
+  redirect("/cdn-cgi/access/logout");
 }
 
-export async function createShipment(formData: FormData) {
-  const user = await getSessionUser();
-  if (user?.role !== "PROCUREMENT") redirect("/shipments");
-
+function shipmentInput(formData: FormData) {
   const reference = text(formData, "reference");
   const shipper = text(formData, "shipper");
   const origin = text(formData, "origin");
@@ -72,34 +48,106 @@ export async function createShipment(formData: FormData) {
     widthCm > 0 &&
     heightCm > 0;
 
-  if (!valid) redirect("/shipments/new?error=invalid");
+  if (!valid) return null;
+  return {
+    reference,
+    shipper,
+    origin,
+    destination,
+    goods,
+    cartons,
+    actualWeightKg,
+    lengthCm,
+    widthCm,
+    heightCm,
+  };
+}
+
+function isDuplicate(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  );
+}
+
+export async function createShipment(formData: FormData) {
+  const user = await getSessionUser();
+  if (user?.role !== "PROCUREMENT") redirect("/shipments");
+
+  const input = shipmentInput(formData);
+  if (!input) redirect("/shipments/new?error=invalid");
 
   try {
     const shipment = await prisma.shipment.create({
       data: {
-        reference,
-        shipper,
-        origin,
-        destination,
-        goods,
-        cartons,
-        actualWeightKg,
-        lengthCm,
-        widthCm,
-        heightCm,
+        ...input,
         createdById: user.id,
       },
     });
     redirect(`/shipments/${shipment.id}`);
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      redirect("/shipments/new?error=duplicate");
+    if (isDuplicate(error)) redirect("/shipments/new?error=duplicate");
+    throw error;
+  }
+}
+
+export async function updateShipment(formData: FormData) {
+  const user = await getSessionUser();
+  if (user?.role !== "PROCUREMENT") redirect("/shipments");
+
+  const shipmentId = text(formData, "shipmentId");
+  const existing = await prisma.shipment.findUnique({
+    where: { id: shipmentId },
+  });
+  if (!existing) redirect("/shipments");
+
+  const input = shipmentInput(formData);
+  if (!input) redirect(`/shipments/${shipmentId}/edit?error=invalid`);
+
+  const detailsChanged = shipmentDetailsChanged(existing, input);
+
+  try {
+    if (detailsChanged) {
+      await prisma.$transaction([
+        prisma.award.deleteMany({ where: { shipmentId } }),
+        prisma.quote.deleteMany({ where: { shipmentId } }),
+        prisma.shipment.update({
+          where: { id: shipmentId },
+          data: { ...input, status: "OPEN" },
+        }),
+      ]);
+    }
+  } catch (error) {
+    if (isDuplicate(error)) {
+      redirect(`/shipments/${shipmentId}/edit?error=duplicate`);
     }
     throw error;
   }
+
+  redirect(
+    detailsChanged
+      ? `/shipments/${shipmentId}?cleared=1`
+      : `/shipments/${shipmentId}`,
+  );
+}
+
+export async function deleteShipment(formData: FormData) {
+  const user = await getSessionUser();
+  if (user?.role !== "PROCUREMENT") redirect("/shipments");
+
+  const shipmentId = text(formData, "shipmentId");
+  const existing = await prisma.shipment.findUnique({
+    where: { id: shipmentId },
+  });
+  if (!existing) redirect("/shipments");
+
+  await prisma.$transaction([
+    prisma.award.deleteMany({ where: { shipmentId } }),
+    prisma.quote.deleteMany({ where: { shipmentId } }),
+    prisma.shipment.delete({ where: { id: shipmentId } }),
+  ]);
+
+  redirect("/shipments");
 }
 
 export async function submitQuote(formData: FormData) {
