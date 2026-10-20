@@ -7,10 +7,12 @@ import {
   containerLabel,
   formatKg,
   formatMoney,
+  isShipmentLocked,
   lowestAmount,
   needsAwardReason,
   shipmentModeLabel,
   statusLabel,
+  toSar,
   volumetricKg,
 } from "@/lib/freight";
 import { getSessionUser } from "@/lib/session";
@@ -27,6 +29,7 @@ const errors: Record<string, string> = {
   terms: "Payment terms must be a whole number of days.",
   currency: "Use SAR or USD.",
   quote: "Choose one of the prices.",
+  locked: "This shipment has been awarded and can no longer be edited or deleted.",
 };
 
 export default async function ShipmentPage({
@@ -46,8 +49,8 @@ export default async function ShipmentPage({
     include: {
       quotes: {
         include: { forwarder: true },
-        orderBy: { amount: "asc" },
       },
+      invites: { include: { forwarder: true } },
       award: {
         include: {
           quote: { include: { forwarder: true } },
@@ -58,6 +61,17 @@ export default async function ShipmentPage({
     },
   });
   if (!shipment) notFound();
+  if (
+    user.role === "FORWARDER" &&
+    !shipment.invites.some((invite) => invite.forwarderId === user.id)
+  ) {
+    notFound();
+  }
+
+  const sortedQuotes = [...shipment.quotes].sort(
+    (left, right) =>
+      toSar(left.amount, left.currency) - toSar(right.amount, right.currency),
+  );
 
   const air =
     shipment.mode === "AIR" &&
@@ -86,11 +100,11 @@ export default async function ShipmentPage({
         air.cartons,
       )
     : null;
-  const ownQuote = shipment.quotes.find((quote) => quote.forwarderId === user.id);
+  const ownQuote = sortedQuotes.find((quote) => quote.forwarderId === user.id);
   const visibleQuotes =
     user.role === "FORWARDER"
-      ? shipment.quotes.filter((quote) => quote.forwarderId === user.id)
-      : shipment.quotes;
+      ? sortedQuotes.filter((quote) => quote.forwarderId === user.id)
+      : sortedQuotes;
   const lowest =
     shipment.quotes.length > 0 ? lowestAmount(shipment.quotes) : null;
 
@@ -104,7 +118,7 @@ export default async function ShipmentPage({
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">{shipment.goods}</p>
         </div>
-        {user.role === "PROCUREMENT" ? (
+        {user.role === "PROCUREMENT" && !isShipmentLocked(shipment) ? (
           <div className="flex items-center gap-2">
             <Link
               href={`/shipments/${shipment.id}/edit`}
@@ -163,6 +177,19 @@ export default async function ShipmentPage({
         )}
       </section>
 
+      {user.role !== "FORWARDER" ? (
+        <section className="rounded-xl border bg-card p-6 shadow-sm">
+          <h2 className="font-medium text-foreground">Invited forwarders</h2>
+          <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+            {shipment.invites.map((invite) => (
+              <li key={invite.forwarderId}>
+                {invite.forwarder.company ?? invite.forwarder.name}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {user.role === "FORWARDER" && shipment.status === "OPEN" && !ownQuote ? (
         <section className="rounded-xl border bg-card p-6 shadow-sm">
           <h2 className="font-medium text-foreground">Your price</h2>
@@ -188,12 +215,14 @@ export default async function ShipmentPage({
             </label>
             <label className="text-sm text-foreground">
               Currency
-              <input
+              <select
                 name="currency"
-                value="SAR"
-                readOnly
-                className="mt-1 w-full rounded-md border border-input bg-muted px-3 py-2"
-              />
+                defaultValue="SAR"
+                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
+              >
+                <option value="SAR">SAR</option>
+                <option value="USD">USD</option>
+              </select>
             </label>
             <label className="text-sm text-foreground">
               Payment terms (days)
@@ -235,10 +264,17 @@ export default async function ShipmentPage({
                     : (quote.forwarder.company ?? quote.forwarder.name)}
                   {" · "}
                   {formatMoney(quote.amount, quote.currency)}
-                  {lowest !== null && quote.amount === lowest && user.role !== "FORWARDER"
+                  {lowest !== null &&
+                  toSar(quote.amount, quote.currency) === lowest &&
+                  user.role !== "FORWARDER"
                     ? " · Lowest"
                     : ""}
                 </p>
+                {user.role !== "FORWARDER" && quote.currency === "USD" ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    (≈ {formatMoney(toSar(quote.amount, quote.currency), "SAR")})
+                  </p>
+                ) : null}
                 <p className="mt-1 text-muted-foreground">
                   {quote.paymentTermsDays} days
                   {quote.note ? ` · ${quote.note}` : ""}
@@ -259,8 +295,8 @@ export default async function ShipmentPage({
           </p>
           <form action={awardQuote} className="mt-4 space-y-3">
             <input type="hidden" name="shipmentId" value={shipment.id} />
-            {shipment.quotes.map((quote) => {
-              const higher = needsAwardReason(quote.amount, shipment.quotes);
+            {sortedQuotes.map((quote) => {
+              const higher = needsAwardReason(quote, shipment.quotes);
               return (
                 <label key={quote.id} className="flex items-start gap-3 text-sm">
                   <input
@@ -275,6 +311,11 @@ export default async function ShipmentPage({
                       {quote.forwarder.company ?? quote.forwarder.name} ·{" "}
                       {formatMoney(quote.amount, quote.currency)}
                     </span>
+                    {quote.currency === "USD" ? (
+                      <span className="block text-xs text-muted-foreground">
+                        (≈ {formatMoney(toSar(quote.amount, quote.currency), "SAR")})
+                      </span>
+                    ) : null}
                     <span className="block text-muted-foreground">
                       {quote.paymentTermsDays} days
                       {higher ? "" : " · Lowest"}
@@ -310,6 +351,11 @@ export default async function ShipmentPage({
               shipment.award.quote.currency,
             )}
           </p>
+          {shipment.award.quote.currency === "USD" ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              (≈ {formatMoney(toSar(shipment.award.quote.amount, "USD"), "SAR")})
+            </p>
+          ) : null}
           {shipment.award.reason ? (
             <p className="mt-2 text-sm text-muted-foreground">
               Reason: {shipment.award.reason}

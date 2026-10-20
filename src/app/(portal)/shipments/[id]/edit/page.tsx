@@ -1,6 +1,7 @@
 import { ShipmentForm } from "@/components/shipment-form";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/session";
+import { isShipmentLocked } from "@/lib/freight";
 import { notFound, redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 const errors: Record<string, string> = {
   invalid: "Check the air weight and dimensions, or the sea container count.",
   duplicate: "That reference already exists.",
+  invite: "Choose at least one forwarder.",
 };
 
 export default async function EditShipmentPage({
@@ -22,8 +24,21 @@ export default async function EditShipmentPage({
 
   const { id } = await params;
   const { error } = await searchParams;
-  const shipment = await prisma.shipment.findUnique({ where: { id } });
+  const [shipment, forwarders] = await Promise.all([
+    prisma.shipment.findUnique({
+      where: { id },
+      include: { award: true, invites: true },
+    }),
+    prisma.user.findMany({
+      where: { role: "FORWARDER" },
+      orderBy: [{ company: "asc" }, { name: "asc" }],
+      select: { id: true, company: true, name: true },
+    }),
+  ]);
   if (!shipment) notFound();
+  if (isShipmentLocked(shipment)) {
+    redirect(`/shipments/${shipment.id}?error=locked`);
+  }
 
   return (
     <main className="max-w-2xl">
@@ -38,6 +53,13 @@ export default async function EditShipmentPage({
         <ShipmentForm
           shipmentId={shipment.id}
           error={error ? errors[error] : undefined}
+          forwarders={forwarders.map((forwarder) => ({
+            id: forwarder.id,
+            label: forwarder.company ?? forwarder.name,
+          }))}
+          selectedForwarderIds={shipment.invites.map(
+            (invite) => invite.forwarderId,
+          )}
           initial={{
             mode: shipment.mode === "SEA" ? "SEA" : "AIR",
             reference: shipment.reference,

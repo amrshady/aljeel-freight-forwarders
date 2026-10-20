@@ -1,5 +1,7 @@
 export const AIR_DIVISOR = 6000;
 export const DEFAULT_PAYMENT_TERMS_DAYS = 90;
+// Official SAMA peg; change here only
+export const SAR_PER_USD = 3.75;
 
 export const ROLES = ["PROCUREMENT", "FINANCE", "FORWARDER"] as const;
 export type Role = (typeof ROLES)[number];
@@ -84,6 +86,12 @@ export function roundMoney(amount: number) {
   return Math.round(amount * 100) / 100;
 }
 
+export function toSar(amount: number, currency: string) {
+  if (currency === "SAR") return amount;
+  if (currency === "USD") return amount * SAR_PER_USD;
+  throw new Error(`Unsupported currency: ${currency}`);
+}
+
 export function volumetricKg(
   lengthCm: number,
   widthCm: number,
@@ -107,16 +115,25 @@ export function chargeableKg(
   return roundMoney(chargeable);
 }
 
-export function lowestAmount(quotes: { amount: number }[]) {
-  return Math.min(...quotes.map((quote) => quote.amount));
+type PricedQuote = { amount: number; currency: string };
+
+export function lowestAmount(quotes: PricedQuote[]) {
+  return Math.min(...quotes.map((quote) => toSar(quote.amount, quote.currency)));
 }
 
 export function needsAwardReason(
-  amount: number,
-  quotes: { amount: number }[],
+  quote: PricedQuote,
+  quotes: PricedQuote[],
 ) {
   if (quotes.length === 0) return false;
-  return roundMoney(amount) > roundMoney(lowestAmount(quotes));
+  return roundMoney(toSar(quote.amount, quote.currency)) > roundMoney(lowestAmount(quotes));
+}
+
+export function isShipmentLocked(shipment: {
+  status: string;
+  award: unknown | null;
+}) {
+  return shipment.status !== "OPEN" || shipment.award !== null;
 }
 
 export function formatKg(kg: number) {

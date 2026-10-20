@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import {
   CONTAINER_TYPES,
   DEFAULT_PAYMENT_TERMS_DAYS,
+  isShipmentLocked,
   needsAwardReason,
   roundMoney,
   shipmentDetailsChanged,
@@ -19,6 +20,20 @@ function text(formData: FormData, key: string) {
 
 function number(formData: FormData, key: string) {
   return Number(formData.get(key));
+}
+
+function selectedForwarderIds(formData: FormData) {
+  return [...new Set(formData.getAll("forwarderIds").map(String).filter(Boolean))];
+}
+
+async function validForwarderIds(formData: FormData) {
+  const ids = selectedForwarderIds(formData);
+  if (ids.length === 0) return null;
+  const forwarders = await prisma.user.findMany({
+    where: { id: { in: ids }, role: "FORWARDER" },
+    select: { id: true },
+  });
+  return forwarders.length === ids.length ? ids : null;
 }
 
 export async function signOut() {
@@ -107,12 +122,17 @@ export async function createShipment(formData: FormData) {
 
   const parsed = shipmentInput(formData);
   if (!parsed.ok) redirect(`/shipments/new?error=${parsed.error}`);
+  const forwarderIds = await validForwarderIds(formData);
+  if (!forwarderIds) redirect("/shipments/new?error=invite");
 
   try {
     const shipment = await prisma.shipment.create({
       data: {
         ...parsed.input,
         createdById: user.id,
+        invites: {
+          create: forwarderIds.map((forwarderId) => ({ forwarderId })),
+        },
       },
     });
     redirect(`/shipments/${shipment.id}`);
@@ -161,28 +181,49 @@ export async function updateShipment(formData: FormData) {
   const shipmentId = text(formData, "shipmentId");
   const existing = await prisma.shipment.findUnique({
     where: { id: shipmentId },
+    include: { award: true, invites: true, quotes: true },
   });
   if (!existing) redirect("/shipments");
+  if (isShipmentLocked(existing)) {
+    redirect(`/shipments/${shipmentId}?error=locked`);
+  }
 
   const parsed = shipmentInput(formData);
   if (!parsed.ok) redirect(`/shipments/${shipmentId}/edit?error=${parsed.error}`);
+  const forwarderIds = await validForwarderIds(formData);
+  if (!forwarderIds) {
+    redirect(`/shipments/${shipmentId}/edit?error=invite`);
+  }
 
-  if (!shipmentDetailsChanged(detailsOf(existing), parsed.input)) {
+  const detailsChanged = shipmentDetailsChanged(detailsOf(existing), parsed.input);
+  const currentIds = existing.invites.map((invite) => invite.forwarderId).sort();
+  const nextIds = [...forwarderIds].sort();
+  const invitesChanged = currentIds.join("\0") !== nextIds.join("\0");
+  if (!detailsChanged && !invitesChanged) {
     redirect(`/shipments/${shipmentId}`);
   }
 
   try {
-    await prisma.$transaction([
-      prisma.award.deleteMany({ where: { shipmentId } }),
-      prisma.quote.deleteMany({ where: { shipmentId } }),
+    const operations = [
+      ...(detailsChanged
+        ? [prisma.quote.deleteMany({ where: { shipmentId } })]
+        : [
+            prisma.quote.deleteMany({
+              where: { shipmentId, forwarderId: { notIn: forwarderIds } },
+            }),
+          ]),
+      prisma.shipmentInvite.deleteMany({ where: { shipmentId } }),
       prisma.shipment.update({
         where: { id: shipmentId },
         data: {
           ...parsed.input,
-          status: "OPEN",
+          invites: {
+            create: forwarderIds.map((forwarderId) => ({ forwarderId })),
+          },
         },
       }),
-    ]);
+    ];
+    await prisma.$transaction(operations);
   } catch (error) {
     if (isDuplicate(error)) {
       redirect(`/shipments/${shipmentId}/edit?error=duplicate`);
@@ -190,7 +231,14 @@ export async function updateShipment(formData: FormData) {
     throw error;
   }
 
-  redirect(`/shipments/${shipmentId}?cleared=1`);
+  const removedQuotedForwarder = existing.quotes.some(
+    (quote) => !forwarderIds.includes(quote.forwarderId),
+  );
+  redirect(
+    detailsChanged || removedQuotedForwarder
+      ? `/shipments/${shipmentId}?cleared=1`
+      : `/shipments/${shipmentId}`,
+  );
 }
 
 export async function deleteShipment(formData: FormData) {
@@ -200,11 +248,14 @@ export async function deleteShipment(formData: FormData) {
   const shipmentId = text(formData, "shipmentId");
   const existing = await prisma.shipment.findUnique({
     where: { id: shipmentId },
+    include: { award: true },
   });
   if (!existing) redirect("/shipments");
+  if (isShipmentLocked(existing)) {
+    redirect(`/shipments/${shipmentId}?error=locked`);
+  }
 
   await prisma.$transaction([
-    prisma.award.deleteMany({ where: { shipmentId } }),
     prisma.quote.deleteMany({ where: { shipmentId } }),
     prisma.shipment.delete({ where: { id: shipmentId } }),
   ]);
@@ -225,8 +276,10 @@ export async function submitQuote(formData: FormData) {
 
   const shipment = await prisma.shipment.findUnique({
     where: { id: shipmentId },
+    include: { invites: { where: { forwarderId: user.id } } },
   });
   if (!shipment) redirect("/shipments");
+  if (shipment.invites.length === 0) redirect("/shipments");
   if (shipment.status !== "OPEN") {
     redirect(`/shipments/${shipmentId}?error=closed`);
   }
@@ -282,7 +335,7 @@ export async function awardQuote(formData: FormData) {
 
   const quote = shipment.quotes.find((item) => item.id === quoteId);
   if (!quote) redirect(`/shipments/${shipmentId}?error=quote`);
-  if (needsAwardReason(quote.amount, shipment.quotes) && !reason) {
+  if (needsAwardReason(quote, shipment.quotes) && !reason) {
     redirect(`/shipments/${shipmentId}?error=reason`);
   }
 

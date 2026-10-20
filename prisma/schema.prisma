@@ -17,6 +17,7 @@ model User {
   quotes     Quote[]
   awards     Award[]    @relation("AwardedBy")
   approvals  Award[]    @relation("ApprovedBy")
+  invites    ShipmentInvite[]
   createdAt  DateTime   @default(now())
 }
 
@@ -40,7 +41,17 @@ model Shipment {
   createdBy      User     @relation("CreatedBy", fields: [createdById], references: [id])
   quotes         Quote[]
   award          Award?
+  invites        ShipmentInvite[]
   createdAt      DateTime @default(now())
+}
+
+model ShipmentInvite {
+  shipmentId  String
+  shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  forwarderId String
+  forwarder   User     @relation(fields: [forwarderId], references: [id], onDelete: Cascade)
+
+  @@id([shipmentId, forwarderId])
 }
 
 model Quote {

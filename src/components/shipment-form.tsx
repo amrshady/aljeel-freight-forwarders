@@ -21,15 +21,20 @@ const empty = {
 };
 
 export type ShipmentFormValues = typeof empty;
+export type ForwarderOption = { id: string; label: string };
 
 export function ShipmentForm({
   error,
   shipmentId,
   initial,
+  forwarders,
+  selectedForwarderIds = [],
 }: {
   error?: string;
   shipmentId?: string;
   initial?: ShipmentFormValues;
+  forwarders: ForwarderOption[];
+  selectedForwarderIds?: string[];
 }) {
   const editing = Boolean(shipmentId);
   const [values, setValues] = useState(initial ?? empty);
@@ -203,6 +208,28 @@ export function ShipmentForm({
           />
         </div>
       )}
+      <fieldset className="space-y-2">
+        <legend className="text-sm text-foreground">Invite forwarders</legend>
+        <p className="text-sm text-muted-foreground">
+          Choose at least one forwarder who can view and price this shipment.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {forwarders.map((forwarder) => (
+            <label
+              key={forwarder.id}
+              className="flex items-center gap-2 rounded-md border border-input px-3 py-2 text-sm text-foreground"
+            >
+              <input
+                type="checkbox"
+                name="forwarderIds"
+                value={forwarder.id}
+                defaultChecked={selectedForwarderIds.includes(forwarder.id)}
+              />
+              {forwarder.label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <button className="inline-flex h-10 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
         {editing ? "Save changes" : "Create shipment"}
       </button>

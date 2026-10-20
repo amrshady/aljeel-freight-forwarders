@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   SAMPLE_SHIPMENT,
+  SAR_PER_USD,
   chargeableKg,
+  isShipmentLocked,
+  lowestAmount,
   needsAwardReason,
   shipmentDetailsChanged,
   volumetricKg,
+  toSar,
 } from "./freight";
 
 describe("air chargeable weight", () => {
@@ -60,13 +64,41 @@ describe("shipment edit", () => {
 });
 
 describe("award reason", () => {
-  const quotes = [{ amount: 400 }, { amount: 450 }];
+  const quotes = [
+    { amount: 2_000, currency: "SAR" },
+    { amount: 1_000, currency: "USD" },
+  ];
+
+  it("converts USD to SAR at the official peg", () => {
+    expect(SAR_PER_USD).toBe(3.75);
+    expect(toSar(1_000, "USD")).toBe(3_750);
+    expect(toSar(2_000, "SAR")).toBe(2_000);
+    expect(() => toSar(1, "EUR")).toThrow("Unsupported currency");
+  });
+
+  it("finds the lowest quote after currency conversion", () => {
+    expect(lowestAmount(quotes)).toBe(2_000);
+  });
 
   it("requires a reason when the chosen price is not the lowest", () => {
-    expect(needsAwardReason(450, quotes)).toBe(true);
+    expect(needsAwardReason(quotes[1], quotes)).toBe(true);
   });
 
   it("does not require a reason for the lowest price", () => {
-    expect(needsAwardReason(400, quotes)).toBe(false);
+    expect(needsAwardReason(quotes[0], quotes)).toBe(false);
+  });
+});
+
+describe("shipment lock", () => {
+  it("allows an open shipment without an award to be edited", () => {
+    expect(isShipmentLocked({ status: "OPEN", award: null })).toBe(false);
+  });
+
+  it.each(["AWARDED", "APPROVED"])("locks a shipment with %s status", (status) => {
+    expect(isShipmentLocked({ status, award: null })).toBe(true);
+  });
+
+  it("locks an open shipment when an award exists", () => {
+    expect(isShipmentLocked({ status: "OPEN", award: { id: "award" } })).toBe(true);
   });
 });

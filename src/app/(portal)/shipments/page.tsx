@@ -11,6 +11,10 @@ export default async function ShipmentsPage() {
   if (!user) redirect("/");
 
   const shipments = await prisma.shipment.findMany({
+    where:
+      user.role === "FORWARDER"
+        ? { invites: { some: { forwarderId: user.id } } }
+        : undefined,
     orderBy: { createdAt: "desc" },
     include: {
       quotes: { where: user.role === "FORWARDER" ? { forwarderId: user.id } : undefined },
