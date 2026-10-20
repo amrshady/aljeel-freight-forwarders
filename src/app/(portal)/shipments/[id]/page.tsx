@@ -1,8 +1,8 @@
-import { approveAward, awardQuote, submitQuote } from "@/app/actions";
+import { approveAward, awardQuote } from "@/app/actions";
 import { DeleteShipmentButton } from "@/components/delete-shipment-button";
+import { ForwarderPriceForm } from "@/components/forwarder-price-form";
 import { prisma } from "@/lib/db";
 import {
-  DEFAULT_PAYMENT_TERMS_DAYS,
   chargeableKg,
   containerLabel,
   formatKg,
@@ -37,12 +37,12 @@ export default async function ShipmentPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; cleared?: string }>;
+  searchParams: Promise<{ error?: string; cleared?: string; saved?: string; removed?: string }>;
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/");
   const { id } = await params;
-  const { error, cleared } = await searchParams;
+  const { error, cleared, saved, removed } = await searchParams;
 
   const shipment = await prisma.shipment.findUnique({
     where: { id },
@@ -140,6 +140,17 @@ export default async function ShipmentPage({
           price.
         </p>
       ) : null}
+      {saved === "1" ? (
+        <p className="rounded-md bg-accent px-3 py-2 text-sm text-foreground">
+          Your price was updated.
+        </p>
+      ) : null}
+      {removed === "1" ? (
+        <p className="rounded-md bg-accent px-3 py-2 text-sm text-foreground">
+          Your price was removed. You can send a new one while this shipment is
+          open.
+        </p>
+      ) : null}
 
       {error && errors[error] ? (
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -190,67 +201,25 @@ export default async function ShipmentPage({
         </section>
       ) : null}
 
-      {user.role === "FORWARDER" && shipment.status === "OPEN" && !ownQuote ? (
-        <section className="rounded-xl border bg-card p-6 shadow-sm">
-          <h2 className="font-medium text-foreground">Your price</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {shipment.mode === "SEA"
-              ? "Price this container requirement."
-              : "Price the chargeable weight."}{" "}
-            Other forwarders cannot see this. Payment terms start at{" "}
-            {DEFAULT_PAYMENT_TERMS_DAYS} days.
-          </p>
-          <form action={submitQuote} className="mt-4 grid gap-4 sm:grid-cols-3">
-            <input type="hidden" name="shipmentId" value={shipment.id} />
-            <label className="text-sm text-foreground">
-              Price
-              <input
-                required
-                name="amount"
-                type="number"
-                min="0.01"
-                step="0.01"
-                className="mt-1 w-full rounded-md border border-input px-3 py-2"
-              />
-            </label>
-            <label className="text-sm text-foreground">
-              Currency
-              <select
-                name="currency"
-                defaultValue="SAR"
-                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2"
-              >
-                <option value="SAR">SAR</option>
-                <option value="USD">USD</option>
-              </select>
-            </label>
-            <label className="text-sm text-foreground">
-              Payment terms (days)
-              <input
-                required
-                name="paymentTermsDays"
-                type="number"
-                min="0"
-                step="1"
-                defaultValue={DEFAULT_PAYMENT_TERMS_DAYS}
-                className="mt-1 w-full rounded-md border border-input px-3 py-2"
-              />
-            </label>
-            <label className="text-sm text-foreground sm:col-span-3">
-              Note
-              <input
-                name="note"
-                className="mt-1 w-full rounded-md border border-input px-3 py-2"
-              />
-            </label>
-            <button className="w-fit inline-flex h-10 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-              Send price
-            </button>
-          </form>
-        </section>
+      {user.role === "FORWARDER" && shipment.status === "OPEN" && !shipment.award ? (
+        <ForwarderPriceForm
+          shipmentId={shipment.id}
+          mode={shipment.mode}
+          quote={
+            ownQuote
+              ? {
+                  amount: ownQuote.amount,
+                  currency: ownQuote.currency,
+                  paymentTermsDays: ownQuote.paymentTermsDays,
+                  note: ownQuote.note,
+                }
+              : undefined
+          }
+        />
       ) : null}
 
-      {visibleQuotes.length > 0 ? (
+      {visibleQuotes.length > 0 &&
+      !(user.role === "FORWARDER" && shipment.status === "OPEN" && !shipment.award) ? (
         <section className="rounded-xl border bg-card p-6 shadow-sm">
           <h2 className="font-medium text-foreground">
             {user.role === "FORWARDER" ? "Your price" : "Prices"}

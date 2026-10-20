@@ -32,7 +32,7 @@ export default async function ShipmentsPage() {
               ? "Create an air or sea shipment, then pick a price."
               : user.role === "FINANCE"
                 ? "Approve the forwarder Procurement has chosen."
-                : "Send one price. Other forwarders’ prices stay hidden."}
+                : "Send a price. You can change or remove it until Procurement awards the shipment. Other forwarders’ prices stay hidden."}
           </p>
         </div>
         {user.role === "PROCUREMENT" ? (

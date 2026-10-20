@@ -263,45 +263,70 @@ export async function deleteShipment(formData: FormData) {
   redirect("/shipments");
 }
 
+function quoteInput(formData: FormData) {
+  const shipmentId = text(formData, "shipmentId");
+  const rawTerms = formData.get("paymentTermsDays");
+  const paymentTermsDays =
+    rawTerms == null || String(rawTerms).trim() === ""
+      ? DEFAULT_PAYMENT_TERMS_DAYS
+      : number(formData, "paymentTermsDays");
+  return {
+    shipmentId,
+    amount: roundMoney(number(formData, "amount")),
+    currency: text(formData, "currency") || "SAR",
+    paymentTermsDays,
+    note: text(formData, "note"),
+  };
+}
+
+function quoteProblem(input: ReturnType<typeof quoteInput>) {
+  if (!Number.isFinite(input.amount) || input.amount <= 0) return "amount";
+  if (!Number.isInteger(input.paymentTermsDays) || input.paymentTermsDays < 0) {
+    return "terms";
+  }
+  if (input.currency !== "SAR" && input.currency !== "USD") return "currency";
+  return null;
+}
+
+async function openShipment(shipmentId: string, forwarderId: string) {
+  const shipment = await prisma.shipment.findUnique({
+    where: { id: shipmentId },
+    include: {
+      award: true,
+      invites: { where: { forwarderId } },
+    },
+  });
+  if (!shipment || shipment.invites.length === 0) return { state: "missing" } as const;
+  if (shipment.status !== "OPEN" || shipment.award) {
+    return { state: "closed" } as const;
+  }
+  return { state: "open", shipment } as const;
+}
+
 export async function submitQuote(formData: FormData) {
   const user = await getSessionUser();
   if (user?.role !== "FORWARDER") redirect("/shipments");
 
-  const shipmentId = text(formData, "shipmentId");
-  const amount = roundMoney(number(formData, "amount"));
-  const currency = text(formData, "currency") || "SAR";
-  const paymentTermsDays =
-    number(formData, "paymentTermsDays") || DEFAULT_PAYMENT_TERMS_DAYS;
-  const note = text(formData, "note");
+  const input = quoteInput(formData);
+  if (!input.shipmentId) redirect("/shipments");
+  const problem = quoteProblem(input);
+  if (problem) redirect(`/shipments/${input.shipmentId}?error=${problem}`);
 
-  const shipment = await prisma.shipment.findUnique({
-    where: { id: shipmentId },
-    include: { invites: { where: { forwarderId: user.id } } },
-  });
-  if (!shipment) redirect("/shipments");
-  if (shipment.invites.length === 0) redirect("/shipments");
-  if (shipment.status !== "OPEN") {
-    redirect(`/shipments/${shipmentId}?error=closed`);
-  }
-  if (!Number.isFinite(amount) || amount <= 0) {
-    redirect(`/shipments/${shipmentId}?error=amount`);
-  }
-  if (!Number.isInteger(paymentTermsDays) || paymentTermsDays < 0) {
-    redirect(`/shipments/${shipmentId}?error=terms`);
-  }
-  if (currency !== "SAR" && currency !== "USD") {
-    redirect(`/shipments/${shipmentId}?error=currency`);
+  const shipment = await openShipment(input.shipmentId, user.id);
+  if (shipment.state === "missing") redirect("/shipments");
+  if (shipment.state === "closed") {
+    redirect(`/shipments/${input.shipmentId}?error=closed`);
   }
 
   try {
     await prisma.quote.create({
       data: {
-        shipmentId,
+        shipmentId: input.shipmentId,
         forwarderId: user.id,
-        amount,
-        currency,
-        paymentTermsDays,
-        note,
+        amount: input.amount,
+        currency: input.currency,
+        paymentTermsDays: input.paymentTermsDays,
+        note: input.note,
       },
     });
   } catch (error) {
@@ -309,12 +334,80 @@ export async function submitQuote(formData: FormData) {
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
-      redirect(`/shipments/${shipmentId}?error=once`);
+      redirect(`/shipments/${input.shipmentId}?error=once`);
     }
     throw error;
   }
 
-  redirect(`/shipments/${shipmentId}`);
+  redirect(`/shipments/${input.shipmentId}`);
+}
+
+export async function updateQuote(formData: FormData) {
+  const user = await getSessionUser();
+  if (user?.role !== "FORWARDER") redirect("/shipments");
+
+  const input = quoteInput(formData);
+  if (!input.shipmentId) redirect("/shipments");
+  const problem = quoteProblem(input);
+  if (problem) redirect(`/shipments/${input.shipmentId}?error=${problem}`);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const shipment = await tx.shipment.findUnique({
+      where: { id: input.shipmentId },
+      include: {
+        award: true,
+        invites: { where: { forwarderId: user.id } },
+      },
+    });
+    if (!shipment || shipment.invites.length === 0) return "missing" as const;
+    if (shipment.status !== "OPEN" || shipment.award) return "closed" as const;
+    const updated = await tx.quote.updateMany({
+      where: { shipmentId: input.shipmentId, forwarderId: user.id },
+      data: {
+        amount: input.amount,
+        currency: input.currency,
+        paymentTermsDays: input.paymentTermsDays,
+        note: input.note,
+      },
+    });
+    return updated.count === 0 ? ("none" as const) : ("ok" as const);
+  });
+  if (result === "missing" || result === "none") {
+    redirect(`/shipments/${input.shipmentId}`);
+  }
+  if (result === "closed") {
+    redirect(`/shipments/${input.shipmentId}?error=closed`);
+  }
+
+  redirect(`/shipments/${input.shipmentId}?saved=1`);
+}
+
+export async function deleteQuote(formData: FormData) {
+  const user = await getSessionUser();
+  if (user?.role !== "FORWARDER") redirect("/shipments");
+
+  const shipmentId = text(formData, "shipmentId");
+  if (!shipmentId) redirect("/shipments");
+
+  const result = await prisma.$transaction(async (tx) => {
+    const shipment = await tx.shipment.findUnique({
+      where: { id: shipmentId },
+      include: {
+        award: true,
+        invites: { where: { forwarderId: user.id } },
+      },
+    });
+    if (!shipment || shipment.invites.length === 0) return "missing" as const;
+    if (shipment.status !== "OPEN" || shipment.award) return "closed" as const;
+    await tx.quote.deleteMany({
+      where: { shipmentId, forwarderId: user.id },
+    });
+    return "ok" as const;
+  });
+  if (result === "missing") redirect("/shipments");
+  if (result === "closed") redirect(`/shipments/${shipmentId}?error=closed`);
+
+  redirect(`/shipments/${shipmentId}?removed=1`);
 }
 
 export async function awardQuote(formData: FormData) {
