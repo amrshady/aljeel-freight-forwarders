@@ -10,7 +10,7 @@ import {
 } from "@/lib/freight";
 import { clearSession, getSessionUser, setSession } from "@/lib/session";
 import { verifyPassword } from "@/lib/password";
-import { getAccessConfig, isAccessAuthMode } from "@/lib/auth-mode";
+import { isAccessAuthMode } from "@/lib/auth-mode";
 
 function text(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -36,9 +36,7 @@ export async function signIn(formData: FormData) {
 
 export async function signOut() {
   if (isAccessAuthMode()) {
-    const config = getAccessConfig();
-    if (!config) redirect("/");
-    redirect(`https://${config.teamDomain}/cdn-cgi/access/logout`);
+    redirect("/cdn-cgi/access/logout");
   }
   const user = await getSessionUser();
   if (!user) redirect("/");

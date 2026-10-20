@@ -48,6 +48,8 @@ the site and pass its signed identity assertion. If either Access setting is
 missing, nobody is treated as signed in. Leave `AUTH_MODE` unset (or set it to
 `password`) to retain email-and-password login.
 
+In Access mode, signing out navigates to the portal's own `/cdn-cgi/access/logout` path.
+
 Access users must be provisioned explicitly; verified identities are never
 created automatically. Add or update one with:
 

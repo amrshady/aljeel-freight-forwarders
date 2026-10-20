@@ -7,10 +7,12 @@ export function Header({
   name,
   role,
   company,
+  accessMode,
 }: {
   name: string;
   role: string;
   company: string | null;
+  accessMode: boolean;
 }) {
   return (
     <header className="header-surface text-primary-foreground">
@@ -36,11 +38,20 @@ export function Header({
             <span className="font-medium">{company ?? name}</span>
             <span className="mt-0.5 block text-white/70">{roleLabel(role)}</span>
           </p>
-          <form action={signOut}>
-            <button className="h-9 rounded-full border border-white/20 bg-white/[0.06] px-4 text-sm text-white/90 hover:border-pimento hover:bg-pimento hover:text-white">
+          {accessMode ? (
+            <a
+              href="/cdn-cgi/access/logout"
+              className="inline-flex h-9 items-center rounded-full border border-white/20 bg-white/[0.06] px-4 text-sm text-white/90 hover:border-pimento hover:bg-pimento hover:text-white"
+            >
               Sign out
-            </button>
-          </form>
+            </a>
+          ) : (
+            <form action={signOut}>
+              <button className="h-9 rounded-full border border-white/20 bg-white/[0.06] px-4 text-sm text-white/90 hover:border-pimento hover:bg-pimento hover:text-white">
+                Sign out
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </header>
